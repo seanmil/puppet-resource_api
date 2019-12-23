@@ -233,14 +233,14 @@ module Puppet::ResourceApi
         # force autoloading of the provider
         provider(type_definition.name)
 
-        initial_fetch = if type_definition.feature?('simple_get_filter')
-                          my_provider.get(context, [])
+        initial_fetch = if context.cache.complete?
+                          Puppet.debug("CACHE HIT for full fetch")
+                          context.cache.all
                         else
-                          my_provider.get(context)
+                          get([])
                         end
 
-        initial_fetch.map do |resource_hash|
-          type_definition.check_schema(resource_hash)
+        results = initial_fetch.map do |resource_hash|
           # allow a :title from the provider to override the default
           result = if resource_hash.key? :title
                      new(title: resource_hash[:title])
@@ -250,17 +250,31 @@ module Puppet::ResourceApi
           result.cache_current_state(resource_hash)
           result
         end
+        context.cache.complete
+        results
+      end
+
+      def self.get(names)
+        fetched = if type_definition.feature?('simple_get_filter')
+                  my_provider.get(context, names)
+                else
+                  my_provider.get(context)
+                end
+        fetched.each do |resource_hash|
+          type_definition.check_schema(resource_hash)
+          context.cache.store(resource_hash)
+        end
       end
 
       def refresh_current_state
-        @rsapi_current_state = if type_definition.feature?('simple_get_filter')
-                                 my_provider.get(context, [rsapi_title]).find { |h| namevar_match?(h) }
+        @rsapi_current_state = if context.cache.key?(rsapi_title)
+                                 Puppet.debug("CACHE HIT for #{rsapi_title}")
+                                 context.cache.get(rsapi_title)
                                else
-                                 my_provider.get(context).find { |h| namevar_match?(h) }
+                                 self.class.get([rsapi_title]).find { |h| namevar_match?(h) }
                                end
 
         if @rsapi_current_state
-          type_definition.check_schema(@rsapi_current_state)
           strict_check(@rsapi_current_state)
         else
           @rsapi_current_state = if rsapi_title.is_a? Hash

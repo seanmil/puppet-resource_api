@@ -1,4 +1,5 @@
 require 'puppet/resource_api/type_definition'
+require 'puppet/resource_api/cache'
 
 # rubocop:disable Style/Documentation
 module Puppet; end
@@ -9,8 +10,9 @@ module Puppet::ResourceApi; end
 # The runtime environment will inject an appropriate implementation.
 class Puppet::ResourceApi::BaseContext
   attr_reader :type
+  attr_reader :cache
 
-  def initialize(definition)
+  def initialize(definition, cache = nil)
     if definition.is_a?(Hash)
       # this is only for backwards compatibility
       @type = Puppet::ResourceApi::TypeDefinition.new(definition)
@@ -19,6 +21,7 @@ class Puppet::ResourceApi::BaseContext
     else
       raise ArgumentError, 'BaseContext requires definition to be a child of Puppet::ResourceApi::BaseTypeDefinition, not <%{actual_type}>' % { actual_type: definition.class }
     end
+    @cache = Puppet::ResourceApi::Cache.new(@type)
   end
 
   def device
