@@ -156,6 +156,7 @@ class Puppet::ResourceApi::BaseContext
   private
 
   def format_titles(titles)
+    titles = titles.to_s if titles.is_a?(Integer)
     if titles.length.zero? && !titles.is_a?(String)
       @type.name
     else
